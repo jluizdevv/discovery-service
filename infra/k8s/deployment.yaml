@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3-management
+          ports:
+            - containerPort: 5672
+            - containerPort: 15672
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: "guest"
+            - name: RABBITMQ_DEFAULT_PASS
+              value: "guest"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-service
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+    - protocol: TCP
+      port: 5672
+      targetPort: 5672
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discovery-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discovery-service
+  template:
+    metadata:
+      labels:
+        app: discovery-service
+    spec:
+      containers:
+        - name: discovery-service
+          image: sua-imagem/discovery-service:latest # SUBSTITUIR
+          ports:
+            - containerPort: 8761
+          env:
+            - name: EUREKA_CLIENT_REGISTER_WITH_EUREKA
+              value: "false"
+            - name: EUREKA_CLIENT_FETCH_REGISTRY
+              value: "false"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plan-api-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: plan-api
+  template:
+    metadata:
+      labels:
+        app: plan-api
+    spec:
+      containers:
+        - name: plan-api
+          image: sua-imagem/plan-api:latest
+          ports:
+            - containerPort: 8081
+          env:
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://discovery-service:8761/eureka/"
+            - name: SPRING_RABBITMQ_HOST
+              value: "rabbitmq-service"
+            - name: SPRING_RABBITMQ_USERNAME
+              value: "guest"
+            - name: SPRING_RABBITMQ_PASSWORD
+              value: "guest"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gym-api-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gym-api
+  template:
+    metadata:
+      labels:
+        app: gym-api
+    spec:
+      containers:
+        - name: gym-api
+          image: sua-imagem/gym-api:latest # SUBSTITUIR
+          ports:
+            - containerPort: 8080
+          env:
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://discovery-service:8761/eureka/"
+            - name: SPRING_RABBITMQ_HOST
+              value: "rabbitmq-service"
+            - name: SPRING_RABBITMQ_USERNAME
+              value: "guest"
+            - name: SPRING_RABBITMQ_PASSWORD
+              value: "guest"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gym-api-external
+spec:
+  type: LoadBalancer
+  selector:
+    app: gym-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
